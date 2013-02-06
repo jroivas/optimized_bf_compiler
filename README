@@ -1,0 +1,24 @@
+Optimizing BrainFuck compiler
+=============================
+
+
+Aim is to make fast and highly optimized BF compiler.
+
+Usage:
+  ./obfc.py app.bf
+
+Prequisites:
+  Python
+  gcc
+
+Simple example:
+  ./obfc.py hello.b
+  ./hello_compiled.bin
+
+More complex example:
+  wget https://bitbucket.org/jsternberg/jsternberg/raw/0baad10ecad62a83869b86c854aa7eb474569726/brainfuck/samples/mandel.bf
+  ./obfc.py mandel.bf
+  ./mandel_compiled.bin
+
+
+ENJOY!
