@@ -22,6 +22,12 @@ def parse(data):
             cmds.append(d)
     return cmds
 
+def is_block(data, blocks):
+    for b in blocks:
+        if data == blocks[b]:
+            return b
+    return None
+
 def detect_loops(data):
     blocks = {}
     i = 0
@@ -38,10 +44,17 @@ def detect_loops(data):
             start = starts.pop()
             end = i
             block = data[start:end+1]
-            blocks[bid] = block
-            newdata = data[:start] + ['b%s' % (bid)] + data[end+1:]
+            tmp = is_block(block, blocks)
+            if tmp is None:
+                blocks[bid] = block
+                middle = ['b%s' % (bid)]
+                bid += 1
+            else:
+                middle = ['b%s' % (tmp)]
+                #print tmp
+                #bid = tmp
+            newdata = data[:start] + middle + data[end+1:]
             data = newdata
-            bid += 1
             #print block
             #print newdata
             starts = []
@@ -98,14 +111,6 @@ def bf_compile(data):
                 imm.append(('<', -1 * val))
             else:
                 imm.append(('>', val))
-            """
-        elif d == '<':
-            (val, i) = optimize_ptrs(data, i, dlen)
-            if val < 0:
-                imm.append(('<', -1 * val))
-            else:
-                imm.append(('>', val))
-        """
         elif d == '.':
             imm.append(('.', ''))
             i += 1
