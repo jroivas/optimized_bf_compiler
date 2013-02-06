@@ -199,6 +199,19 @@ def compile_c(data, blocks):
 
     return inc + methods + res
 
+def write_c(oname, cdata):
+    onamec = oname + '_compiled.c'
+    fd = open(onamec, 'w')
+    fd.write(cdata)
+    fd.close()
+    return onamec
+
+def compile_bin(oname):
+    oname_bin = oname.replace('.c', '')
+    oname_bin += '.bin'
+    os.system('gcc -O3 %s -o %s' % (oname, oname_bin))
+    return oname_bin
+
 def main():
     if len(sys.argv) <= 1:
         print ('Usage: %s source.b' % (sys.argv[0]))
@@ -211,12 +224,13 @@ def main():
         sys.exit(1)
     parsed = parse(data)
     (data, blocks) = detect_loops(parsed)
-    #print data, blocks
-    #print data
-    #for b in blocks:
-    #    print b, blocks[b]
     (idata, iblocks) = immediate(data, blocks)
-    print compile_c(idata, iblocks)
+    cdata = compile_c(idata, iblocks)
+    oname = os.path.basename(fname)
+    oname = oname.replace('.b', '')
+    oname_bin = write_c(oname, cdata)
+    res = compile_bin(oname_bin)
+    print ('Output: %s' % (res))
 
 if __name__ == '__main__':
     main()
