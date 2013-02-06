@@ -86,29 +86,41 @@ def bf_compile(data):
     dlen = len(data)
     while True:
         d = data[i]
-        if d == '+':
+        if d == '+' or d == '-':
             (val, i) = optimize_adds(data, i, dlen)
-            imm.append(('+', val))
-        elif d == '-':
-            (val, i) = optimize_adds(data, i, dlen)
-            imm.append(('-', val))
-        elif d == '>':
+            if val < 0:
+                imm.append(('-', -1 * val))
+            else:
+                imm.append(('+', val))
+        elif d == '>' or d == '<':
             (val, i) = optimize_ptrs(data, i, dlen)
-            imm.append(('>', val))
+            if val < 0:
+                imm.append(('<', -1 * val))
+            else:
+                imm.append(('>', val))
+            """
         elif d == '<':
             (val, i) = optimize_ptrs(data, i, dlen)
-            imm.append(('<', val))
+            if val < 0:
+                imm.append(('<', -1 * val))
+            else:
+                imm.append(('>', val))
+        """
         elif d == '.':
             imm.append(('.', ''))
+            i += 1
         elif d == ',':
             imm.append((',', ''))
+            i += 1
         elif d == '[':
             imm.append(('[', ''))
+            i += 1
         elif d == ']':
             imm.append((']', ''))
+            i += 1
         elif d[0] == 'b':
             imm.append((d, ''))
-        i += 1
+            i += 1
 
         if i >= dlen:
             break
@@ -139,15 +151,15 @@ def compile_c_block(data, prefix='  '):
             if c == 1:
                 res += prefix + '++(*ptr);\n'
             else:
-                res += prefix + '*ptr += %s;\n' % (c)
+                res += prefix + '(*ptr) += %s;\n' % (c)
         elif d == '-':
             if c == 1:
-                res += prefix + '++(*ptr);\n'
+                res += prefix + '--(*ptr);\n'
             else:
-                res += prefix + '*ptr -= %s;\n' % (c)
+                res += prefix + '(*ptr) -= %s;\n' % (c)
         elif d == '.':
-            print "PRINT"
             res += prefix + 'putchar(*ptr);\n'
+            #res += prefix + 'printf("%d\\n", *ptr);\n'
         elif d == ',':
             res += prefix + '*ptr = getchar();\n'
         elif d == '[':
@@ -159,7 +171,7 @@ def compile_c_block(data, prefix='  '):
             res += prefix + '}\n'
             closed -= 1
         elif d[0] == 'b':
-            res += prefix + 'ptr = %s%s(ptr, mem);\n' % (__call_prefix, d[1:])
+            res += prefix + 'ptr = %s%s(ptr);\n' % (__call_prefix, d[1:])
     while closed > 0:
         res += prefix + '}\n'
         closed -= 1
@@ -171,15 +183,15 @@ def compile_c(data, blocks):
     inc = '#include <stdlib.h>\n'
     prefix = '\t'
     for b in blocks:
-        methods += 'char *%s%s(char *ptr, char *mem);\n' % (__call_prefix, b)
-        res += 'char *%s%s(char *ptr, char *mem) {\n' % (__call_prefix, b)
+        methods += 'char *%s%s(unsigned char *ptr);\n' % (__call_prefix, b)
+        res += 'char *%s%s(unsigned char *ptr) {\n' % (__call_prefix, b)
         res += compile_c_block(blocks[b], prefix)
         res += prefix + 'return ptr;\n'
         res += '}\n'
     
     res += 'int main(unsigned int argc, char **argv) {\n'
-    res += prefix + 'char *mem = (char *)malloc(1000);\n'
-    res += prefix + 'char *ptr = mem;\n'
+    res += prefix + 'unsigned char *mem = (unsigned char *)malloc(10000);\n'
+    res += prefix + 'unsigned char *ptr = mem;\n'
     res += compile_c_block(data, prefix)
     res += prefix + 'free(mem);\n'
     res += prefix + 'return 0;\n'
@@ -204,7 +216,7 @@ def main():
     #for b in blocks:
     #    print b, blocks[b]
     (idata, iblocks) = immediate(data, blocks)
-    #print compile_c(idata, iblocks)
+    print compile_c(idata, iblocks)
 
 if __name__ == '__main__':
     main()
