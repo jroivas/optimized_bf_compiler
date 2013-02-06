@@ -5,6 +5,7 @@ import os
 
 __cmds = ['<', '>', '+', '-', '.', ',', '[', ']']
 __call_prefix = '__func_call_'
+__mem_type = 'unsigned int'
 
 def read(fname):
     try:
@@ -145,8 +146,12 @@ def compile_c_block(data, prefix='  '):
         if d == '>':
             if c == 1:
                 res += prefix + '++ptr;\n'
+                # Guards help to resize memory in case of owerflow
+                #res += prefix + 'ptr = guard_mem(ptr);\n'
             else:
                 res += prefix + 'ptr += %s;\n' % (c)
+                # Guards help to resize memory in case of owerflow
+                #res += prefix + 'ptr = guard_mem(ptr);\n'
         elif d == '<':
             if c == 1:
                 res += prefix + '--ptr;\n'
@@ -164,6 +169,7 @@ def compile_c_block(data, prefix='  '):
                 res += prefix + '(*ptr) -= %s;\n' % (c)
         elif d == '.':
             res += prefix + 'putchar(*ptr);\n'
+            res += prefix + 'fflush(stdout);\n'
             #res += prefix + 'printf("%d\\n", *ptr);\n'
         elif d == ',':
             res += prefix + '*ptr = getchar();\n'
@@ -185,18 +191,33 @@ def compile_c_block(data, prefix='  '):
 def compile_c(data, blocks):
     res = ''
     methods = ''
-    inc = '#include <stdlib.h>\n'
+    inc = ''
+    inc += '#include <stdio.h>\n'
+    inc += '#include <stdlib.h>\n'
+    inc += '/* Use some initial memory size */\n'
+    inc += 'unsigned int mem_size = 10000;\n'
+    inc += '%s *mem = 0;\n' % (__mem_type)
+    inc += '/* Check if we need to increment memory size */\n'
+    inc += 'static %s *guard_mem(%s *ptr) {\n' % (__mem_type, __mem_type)
+    inc += '\tunsigned int diff = ptr-mem;\n'
+    inc += '\tif (diff>mem_size) {\n'
+    inc += '\t\tmem_size = diff + 1000;\n'
+    inc += '\t\tmem = realloc(mem, mem_size);\n'
+    inc += '\t\treturn mem + diff;\n'
+    inc += '\t}\n'
+    inc += '\treturn ptr;\n'
+    inc += '}\n'
     prefix = '\t'
     for b in blocks:
-        methods += 'char *%s%s(unsigned char *ptr);\n' % (__call_prefix, b)
-        res += 'char *%s%s(unsigned char *ptr) {\n' % (__call_prefix, b)
+        methods += '%s *%s%s(%s *ptr);\n' % (__mem_type, __call_prefix, b, __mem_type)
+        res += '%s *%s%s(%s *ptr) {\n' % (__mem_type, __call_prefix, b, __mem_type)
         res += compile_c_block(blocks[b], prefix)
         res += prefix + 'return ptr;\n'
         res += '}\n'
     
     res += 'int main(unsigned int argc, char **argv) {\n'
-    res += prefix + 'unsigned char *mem = (unsigned char *)malloc(10000);\n'
-    res += prefix + 'unsigned char *ptr = mem;\n'
+    res += prefix + 'mem = (%s*)calloc(1, mem_size);\n' % (__mem_type)
+    res += prefix + '%s *ptr = mem;\n' % (__mem_type)
     res += compile_c_block(data, prefix)
     res += prefix + 'free(mem);\n'
     res += prefix + 'return 0;\n'
@@ -232,7 +253,8 @@ def main():
     (idata, iblocks) = immediate(data, blocks)
     cdata = compile_c(idata, iblocks)
     oname = os.path.basename(fname)
-    oname = oname.replace('.b', '')
+    oname = oname.lower().replace('.bf', '')
+    oname = oname.lower().replace('.b', '')
     oname_bin = write_c(oname, cdata)
     res = compile_bin(oname_bin)
     print ('Output: %s' % (res))
