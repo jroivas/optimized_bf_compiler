@@ -1,14 +1,25 @@
 import os
+from backends.backend import Backend
 
-class CBackend:
+class CBackend(Backend):
     __call_prefix = '__func_call_'
-    __mem_type = 'unsigned int'
+    #__mem_type = 'unsigned int'
 
-    def __init__(self, name):
+    def __init__(self, name, flags):
         self.code = None
         self.binary_name = None
         self.src_name = None
         self.name = name
+        self.flags = flags
+        ws = self.flags['word_size']
+        if ws == '2':
+            self.__mem_type = 'unsigned short'
+        elif ws == '4' or ws == '3':
+            self.__mem_type = 'unsigned int'
+        elif ws == '8':
+            self.__mem_type = 'unsigned long long'
+        else:
+            self.__mem_type = 'unsigned char'
 
     def translate(self, data, blocks):
         res = []
@@ -91,7 +102,7 @@ class CBackend:
                 lines.append(prefix + 'ptr[%s] = %s;' % c)
             elif d == '.':
                 lines.append(prefix + 'putchar(*ptr);')
-                #res += prefix + 'fflush(stdout);\n'
+                #lines.append(prefix + 'fflush(stdout);')
                 #res += prefix + 'printf("%d\\n", *ptr);\n'
             elif d == ',':
                 lines.append(prefix + '*ptr = getchar();')
@@ -115,18 +126,14 @@ class CBackend:
         return lines
         #return '\n'.join(lines)
 
-
     def compile(self):
         oname_bin = self.src_name.replace('.c', '')
-        oname_bin += '.bin'
+        #oname_bin += '.bin'
         os.system('gcc -O3 %s -o %s' % (self.src_name, oname_bin))
         self.binary_name = oname_bin
 
-    def binaryName(self):
-        return self.binary_name
-
     def write(self):
-        onamec = self.name + '_compiled.c'
+        onamec = self.name + '.c'
         fd = open(onamec, 'w')
         fd.write(self.code)
         fd.close()

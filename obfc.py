@@ -2,10 +2,12 @@
 
 import sys
 import os
+import argparse
+import importlib
 
 __cmds = ['<', '>', '+', '-', '.', ',', '[', ']']
 
-from backends.c import CBackend
+#from backends.c import CBackend
 
 def read(fname):
     try:
@@ -118,6 +120,14 @@ def optimize_simple_adds(data):
             offs += c
             val = 0
         elif d == '=':
+            if val != 0:
+                if offs != 0:
+                    newcode.append(('+p', (offs, val)))
+                else:
+                    newcode.append(('+', val))
+                    orig_change = True
+            val = 0
+
             values = {}
             newcode.append((d, (c[0]+offs, c[1])))
         elif d == '[':
@@ -248,12 +258,39 @@ def immediate(data, blocks):
     data = bf_compile(data)
     return (data, imm_blocks)
 
-def main():
-    if len(sys.argv) <= 1:
-        print ('Usage: %s source.b' % (sys.argv[0]))
-        sys.exit(1)
+def get_backend(oname, flags):
+    name = flags['backend']    
+    fdir = os.path.dirname(__file__)
+    backend_dir = os.path.join(fdir, 'backends')
+    files = os.listdir(backend_dir)
+    for f in files:
+        if f.endswith('.py') and f != '__init__.py' and f != 'backend.py':
+            fname = f.replace('.py', '')
+            if fname == name:
+                mod = importlib.import_module('backends')
+                findname = name + 'backend'
+                for item in dir(mod):
+                    if findname == item.lower():
+                        constr = getattr(mod, item)
+                        return constr(oname, flags)
 
-    fname = sys.argv[1]
+    return None
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Optimizing BrainFuck compiler')
+    parser.add_argument('-w', '--word-size', action='store', default='1', help='Define word size in bytes, default 1')
+    parser.add_argument('--backend', action='store', default='c', help='Define backend, default "c"')
+    parser.add_argument('-o', '--output', action='store', default=None, help='Output file name')
+    parser.add_argument('file', action='store', default=None, help='BrainFuck source file')
+
+    if len(sys.argv) <= 1:
+        parser.print_help()
+
+    args = parser.parse_args()
+    flags = vars(args)
+
+    fname = flags['file']
     data = read(fname)
     if data is None:
         print ('\nERROR: File not found: %s\n' % (fname))
@@ -264,10 +301,17 @@ def main():
     (idata, iblocks) = optimize_loops(idata, iblocks)
     (idata, iblocks) = merge_small_blocks(idata, iblocks)
 
-    oname = os.path.basename(fname)
-    oname = oname.lower().replace('.bf', '')
-    oname = oname.lower().replace('.b', '')
-    backend = CBackend(oname)
+    if flags['output'] is None:
+        oname = os.path.basename(fname)
+        oname = oname.lower().replace('.bf', '')
+        oname = oname.lower().replace('.b', '')
+    else:
+        oname = flags['output']
+    #backend = CBackend(oname, flags)
+    backend = get_backend(oname, flags)
+    if backend == None:
+        print ('Backend not found: %s' % (flags['backend']))
+        sys.exit(1)
 
     backend.translate(idata, iblocks)
     backend.write()

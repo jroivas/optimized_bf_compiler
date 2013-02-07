@@ -4,4 +4,6 @@ sys.path.append(os.path.dirname(__file__))
 
 from c import CBackend
 
-__all__ = [ "CBackend" ]
+__all__ = [
+    'CBackend',
+    ]
