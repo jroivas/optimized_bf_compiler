@@ -11,13 +11,13 @@ class CBackend:
         self.name = name
 
     def translate(self, data, blocks):
-        res = ''
+        res = []
         methods = ''
         inc = ''
         inc += '#include <stdio.h>\n'
         inc += '#include <stdlib.h>\n'
         inc += '/* Use some initial memory size */\n'
-        inc += 'unsigned int mem_size = 10000;\n'
+        inc += 'unsigned int mem_size = 1000000;\n'
         inc += '%s *mem = 0;\n' % (self.__mem_type)
         inc += '/* Check if we need to increment memory size */\n'
         inc += 'static %s *guard_mem(%s *ptr) {\n' % (self.__mem_type, self.__mem_type)
@@ -32,15 +32,16 @@ class CBackend:
         prefix = '\t'
         for b in blocks:
             methods += '%s *%s%s(%s *ptr);\n' % (self.__mem_type, self.__call_prefix, b, self.__mem_type)
-            res += '%s *%s%s(%s *ptr) {\n' % (self.__mem_type, self.__call_prefix, b, self.__mem_type)
+            res.append('%s *%s%s(%s *ptr) {' % (self.__mem_type, self.__call_prefix, b, self.__mem_type))
             res += self.translace_c_block(blocks[b], prefix)
-            res += prefix + 'return ptr;\n'
-            res += '}\n'
+            res.append(prefix + 'return ptr;')
+            res.append('}')
         
+        res = '\n'.join(res) + '\n'
         res += 'int main(unsigned int argc, char **argv) {\n'
         res += prefix + 'mem = (%s*)calloc(1, mem_size);\n' % (self.__mem_type)
-        res += prefix + '%s *ptr = mem;\n' % (self.__mem_type)
-        res += self.translace_c_block(data, prefix)
+        res += prefix + '%s *ptr = mem + 1000;\n' % (self.__mem_type)
+        res += '\n'.join(self.translace_c_block(data, prefix)) + '\n'
         res += prefix + 'free(mem);\n'
         res += prefix + 'return 0;\n'
         res += '}\n'
@@ -49,52 +50,67 @@ class CBackend:
 
     def translace_c_block(self, data, prefix='  '):
         closed = 0
-        res = ''
-        for d, c in data:
+        #res = ''
+        lines = []
+        orig_prefix = prefix
+        for (d, c) in data:
             if d == '>':
-                if c == 1:
-                    res += prefix + '++ptr;\n'
+                if c == 0:
+                    pass
+                elif c == 1:
+                    lines.append(prefix + '++ptr;')
                     # Guards help to resize memory in case of owerflow
                     #res += prefix + 'ptr = guard_mem(ptr);\n'
+                elif c == -1:
+                    lines.append(prefix + '--ptr;')
                 else:
-                    res += prefix + 'ptr += %s;\n' % (c)
+                    lines.append(prefix + 'ptr += %s;' % (c))
                     # Guards help to resize memory in case of owerflow
                     #res += prefix + 'ptr = guard_mem(ptr);\n'
-            elif d == '<':
-                if c == 1:
-                    res += prefix + '--ptr;\n'
-                else:
-                    res += prefix + 'ptr -= %s;\n' % (c)
             elif d == '+':
-                if c == 1:
-                    res += prefix + '++(*ptr);\n'
+                if c == 0:
+                    pass
+                elif c == 1:
+                    lines.append(prefix + '++(*ptr);')
+                elif c == -1:
+                    lines.append(prefix + '--(*ptr);')
                 else:
-                    res += prefix + '(*ptr) += %s;\n' % (c)
-            elif d == '-':
-                if c == 1:
-                    res += prefix + '--(*ptr);\n'
-                else:
-                    res += prefix + '(*ptr) -= %s;\n' % (c)
+                    lines.append(prefix + '(*ptr) += %s;' % (c))
+            elif d == '+p':
+                if c[0] != 0:
+                    if c[1] == 1:
+                        lines.append(prefix + '++ptr[%s];' % (c[0]))
+                    elif c[1] == -1:
+                        lines.append(prefix + '--ptr[%s];' % (c[0]))
+                    else:
+                        lines.append(prefix + 'ptr[%s] += %s;' % (c[0], c[1]))
+            elif d == '=':
+                lines.append(prefix + '(*ptr) = %s;' % (c))
             elif d == '.':
-                res += prefix + 'putchar(*ptr);\n'
-                res += prefix + 'fflush(stdout);\n'
+                lines.append(prefix + 'putchar(*ptr);')
+                #res += prefix + 'fflush(stdout);\n'
                 #res += prefix + 'printf("%d\\n", *ptr);\n'
             elif d == ',':
-                res += prefix + '*ptr = getchar();\n'
+                lines.append(prefix + '*ptr = getchar();')
             elif d == '[':
-                res += prefix + 'while (*ptr) {\n'
-                prefix = prefix + prefix
+                lines.append(prefix + 'while (*ptr) {')
+                prefix += orig_prefix
+                closed += 1
+            elif d == '[if':
+                lines.append(prefix + 'if (*ptr) {')
+                prefix += orig_prefix
                 closed += 1
             elif d == ']':
                 prefix = prefix[:-1]
-                res += prefix + '}\n'
+                lines.append(prefix + '}')
                 closed -= 1
             elif d[0] == 'b':
-                res += prefix + 'ptr = %s%s(ptr);\n' % (self.__call_prefix, d[1:])
+                lines.append(prefix + 'ptr = %s%s(ptr);' % (self.__call_prefix, d[1:]))
         while closed > 0:
-            res += prefix + '}\n'
+            lines.append(prefix + '}')
             closed -= 1
-        return res
+        return lines
+        #return '\n'.join(lines)
 
 
     def compile(self):

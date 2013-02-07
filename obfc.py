@@ -33,7 +33,6 @@ def detect_loops(data):
     blocks = {}
     i = 0
     starts = []
-    #for d in data:
     bid = 0
     while True:
         d = data[i]
@@ -94,6 +93,62 @@ def optimize_ptrs(data, i, dlen):
         d = data[i]
     return (val, i)
 
+def optimize_simple_adds(data):
+    offs = 0
+    val = 0
+    newcode = []
+    prev = ''
+    origoff = 0
+    orig_change = False
+    for (d, c) in data:
+        prev = d
+        if d == '+':
+            val += c
+        elif d == '>':
+            if val != 0:
+                if offs != 0:
+                    newcode.append(('+p', (offs, val)))
+                else:
+                    newcode.append(('+', val))
+                    orig_change = True
+            offs += c
+            val = 0
+        elif d == '[':
+            pass
+        elif d == ']':
+            if offs != 0:
+                newcode.append(('>', offs))
+                orig_change = True
+                origoff -= offs
+                offs = 0
+        else:
+            return data
+
+    if val != 0:
+        newcode.append(('+', val))
+        if offs == 0:
+            orig_change = True
+
+    if data[0][0] == '[':
+        if not orig_change:
+            newcode.insert(0, ('[if',''))
+            newcode.append((']',''))
+        else:
+            newcode.insert(0, ('[',''))
+            newcode.append((']',''))
+
+    return newcode
+
+def optimize_loops_1(data):
+    if data == [('[', ''), ('+', -1), (']', '')]:
+        return [('=', '0')]
+    return data
+
+def optimize_loops(data, blocks):
+    for b in blocks:
+        blocks[b] = optimize_loops_1(blocks[b])
+    return (data, blocks)
+
 def bf_compile(data):
     imm = []
     i = 0
@@ -102,16 +157,10 @@ def bf_compile(data):
         d = data[i]
         if d == '+' or d == '-':
             (val, i) = optimize_adds(data, i, dlen)
-            if val < 0:
-                imm.append(('-', -1 * val))
-            else:
-                imm.append(('+', val))
+            imm.append(('+', val))
         elif d == '>' or d == '<':
             (val, i) = optimize_ptrs(data, i, dlen)
-            if val < 0:
-                imm.append(('<', -1 * val))
-            else:
-                imm.append(('>', val))
+            imm.append(('>', val))
         elif d == '.':
             imm.append(('.', ''))
             i += 1
@@ -130,8 +179,48 @@ def bf_compile(data):
 
         if i >= dlen:
             break
+
+    imm = optimize_simple_adds(imm)
     return imm
 
+def merge_small_block(block, small_ones):
+    tmp = []
+    for (d, c) in block:
+        ok = False
+        if d[0] == 'b':
+            num = int(d[1:])
+            if num in small_ones:
+                tmp += small_ones[num]
+                ok = True
+        if not ok:
+            tmp.append((d, c))
+
+    return tmp
+
+def sub_block_cnt(data):
+    cnt = 0
+    for (d, c) in data:
+        if d[0] == 'b':
+            cnt += 1
+
+    return cnt
+
+def merge_small_blocks(data, blocks):
+    small_ones = {}
+    big_ones = {}
+    for b in blocks:
+        if len(blocks[b]) <= 4 and sub_block_cnt(blocks[b]) == 0:
+            small_ones[b] = blocks[b]
+        else:
+            big_ones[b] = blocks[b]
+
+    newblocks = {}
+    for b in big_ones:
+        newblocks[b] = merge_small_block(big_ones[b], small_ones)
+    newdata = merge_small_block(data, small_ones)
+
+    return (newdata, newblocks)
+                    
 def immediate(data, blocks):
     imm_blocks = {}
     for b in blocks:
@@ -152,6 +241,8 @@ def main():
     parsed = parse(data)
     (data, blocks) = detect_loops(parsed)
     (idata, iblocks) = immediate(data, blocks)
+    (idata, iblocks) = optimize_loops(idata, iblocks)
+    (idata, iblocks) = merge_small_blocks(idata, iblocks)
 
     oname = os.path.basename(fname)
     oname = oname.lower().replace('.bf', '')
