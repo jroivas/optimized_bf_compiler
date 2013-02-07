@@ -11,14 +11,25 @@ Prequisites:
   Python
   gcc
 
+
 Simple example:
   ./obfc.py hello.b
-  ./hello_compiled.bin
+  ./hello
 
 More complex example:
   wget https://bitbucket.org/jsternberg/jsternberg/raw/0baad10ecad62a83869b86c854aa7eb474569726/brainfuck/samples/mandel.bf
   ./obfc.py mandel.bf
-  ./mandel_compiled.bin
+  ./mandel
+
+Compiling to RPython:
+  ./obfc.py mandel.b --backend rpython
+
+  # Interpret with Python
+  python mandel.py
+
+  # Compile with PyPy/RPython
+  /path/to/pypy-2.0/pypy/translator/goal/translate.py mandel.py
+  ./mandel-c
 
 
 ENJOY!
