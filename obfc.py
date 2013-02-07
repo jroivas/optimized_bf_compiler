@@ -45,7 +45,9 @@ def detect_loops(data):
             end = i
             block = data[start:end+1]
             tmp = is_block(block, blocks)
-            if tmp is None:
+            if block == ['[', '-', ']']:
+                middle = ['=0']
+            elif tmp is None:
                 blocks[bid] = block
                 middle = ['b%s' % (bid)]
                 bid += 1
@@ -100,6 +102,7 @@ def optimize_simple_adds(data):
     prev = ''
     origoff = 0
     orig_change = False
+    deltas = {}
     for (d, c) in data:
         prev = d
         if d == '+':
@@ -111,23 +114,46 @@ def optimize_simple_adds(data):
                 else:
                     newcode.append(('+', val))
                     orig_change = True
+                deltas[origoff + offs] = deltas.get(origoff + offs, 0) + val
             offs += c
             val = 0
+        elif d == '=':
+            if val != 0:
+                if offs != 0:
+                    newcode.append(('+p', (offs, val)))
+                else:
+                    newcode.append(('+', val))
+                    orig_change = True
+                deltas[origoff + offs] = deltas.get(origoff + offs, 0) + val
+            val = 0
+            newcode.append((d, (c[0]+offs, c[1])))
         elif d == '[':
             pass
         elif d == ']':
             if offs != 0:
                 newcode.append(('>', offs))
                 orig_change = True
-                origoff -= offs
+                origoff += offs
                 offs = 0
         else:
             return data
 
     if val != 0:
         newcode.append(('+', val))
+        deltas[origoff + offs] = deltas.get(origoff + offs, 0) + val
         if offs == 0:
             orig_change = True
+
+    if deltas and offs == 0 and deltas.get(0,0) == -1:
+        deltas.pop(0)
+        if deltas:
+            newcode = []
+            for off in deltas:
+                newcode.append( ('+*', (off, 0, deltas[off])))
+            newcode.append( ('=', (0, 0)))
+            return newcode
+            #print deltas
+            #print newcode
 
     if data[0][0] == '[':
         if not orig_change:
@@ -141,7 +167,7 @@ def optimize_simple_adds(data):
 
 def optimize_loops_1(data):
     if data == [('[', ''), ('+', -1), (']', '')]:
-        return [('=', '0')]
+        return [('=', (0, 0))]
     return data
 
 def optimize_loops(data, blocks):
@@ -175,6 +201,9 @@ def bf_compile(data):
             i += 1
         elif d[0] == 'b':
             imm.append((d, ''))
+            i += 1
+        elif d == '=0':
+            imm.append(('=', (0, 0)))
             i += 1
 
         if i >= dlen:

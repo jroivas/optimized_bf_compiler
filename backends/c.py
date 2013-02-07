@@ -84,8 +84,11 @@ class CBackend:
                         lines.append(prefix + '--ptr[%s];' % (c[0]))
                     else:
                         lines.append(prefix + 'ptr[%s] += %s;' % (c[0], c[1]))
+            elif d == '+*':
+                lines.append(prefix + 'ptr[%s] += ptr[%s] * %s;' % c)
             elif d == '=':
-                lines.append(prefix + '(*ptr) = %s;' % (c))
+                #lines.append(prefix + '*(ptr+%s) = %s;' % c)
+                lines.append(prefix + 'ptr[%s] = %s;' % c)
             elif d == '.':
                 lines.append(prefix + 'putchar(*ptr);')
                 #res += prefix + 'fflush(stdout);\n'
