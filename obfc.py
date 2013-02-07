@@ -102,7 +102,7 @@ def optimize_simple_adds(data):
     prev = ''
     origoff = 0
     orig_change = False
-    deltas = {}
+    values = {}
     for (d, c) in data:
         prev = d
         if d == '+':
@@ -114,18 +114,11 @@ def optimize_simple_adds(data):
                 else:
                     newcode.append(('+', val))
                     orig_change = True
-                deltas[origoff + offs] = deltas.get(origoff + offs, 0) + val
+                values[origoff + offs] = values.get(origoff + offs, 0) + val
             offs += c
             val = 0
         elif d == '=':
-            if val != 0:
-                if offs != 0:
-                    newcode.append(('+p', (offs, val)))
-                else:
-                    newcode.append(('+', val))
-                    orig_change = True
-                deltas[origoff + offs] = deltas.get(origoff + offs, 0) + val
-            val = 0
+            values = {}
             newcode.append((d, (c[0]+offs, c[1])))
         elif d == '[':
             pass
@@ -140,20 +133,18 @@ def optimize_simple_adds(data):
 
     if val != 0:
         newcode.append(('+', val))
-        deltas[origoff + offs] = deltas.get(origoff + offs, 0) + val
+        values[origoff + offs] = values.get(origoff + offs, 0) + val
         if offs == 0:
             orig_change = True
 
-    if deltas and offs == 0 and deltas.get(0,0) == -1:
-        deltas.pop(0)
-        if deltas:
+    if values and offs == 0 and values.get(0,0) == -1:
+        values.pop(0)
+        if values:
             newcode = []
-            for off in deltas:
-                newcode.append( ('+*', (off, 0, deltas[off])))
+            for off in values:
+                newcode.append( ('+*', (off, 0, values[off])))
             newcode.append( ('=', (0, 0)))
             return newcode
-            #print deltas
-            #print newcode
 
     if data[0][0] == '[':
         if not orig_change:
