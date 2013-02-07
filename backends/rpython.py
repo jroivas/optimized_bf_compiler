@@ -27,10 +27,22 @@ class RPythonBackend(Backend):
 
         inc += 'import os\n'
         inc += 'import sys\n'
+        inc += """
+try:
+    from pypy.rlib.jit import JitDriver, purefunction
+except ImportError:
+    class JitDriver(object):
+        def __init__(self,**kw): pass
+        def jit_merge_point(self,**kw): pass
+        def can_enter_jit(self,**kw): pass
+    def purefunction(f): return f
+
+jitdriver = JitDriver(greens=['ptr'], reds=['mem'])
+
+"""
 
         prefix = '  '
         for b in blocks:
-            #methods += '%s *%s%s(%s *ptr);\n' % (self.__mem_type, self.__call_prefix, b, self.__mem_type)
             res.append('def %s%s(mem, ptr):' % (self.__call_prefix, b))
             res += self.translace_c_block(blocks[b], prefix)
             res.append(prefix + 'return ptr')
@@ -56,9 +68,9 @@ if __name__ == '__main__':
 
     def translace_c_block(self, data, prefix='  '):
         closed = 0
-        #res = ''
         lines = []
         orig_prefix = prefix
+        got_jit = False
         for (d, c) in data:
             if d == '>':
                 if c == 0:
@@ -69,7 +81,7 @@ if __name__ == '__main__':
                 if c == 0:
                     pass
                 else:
-                    lines.append(prefix + 'while ptr > len(mem) + 1:')
+                    lines.append(prefix + 'while ptr + 100 > len(mem):')
                     lines.append(prefix + prefix + 'mem.append(0)')
                     lines.append(prefix + 'mem[ptr] += %s' % (c))
             elif d == '+p':
@@ -86,6 +98,9 @@ if __name__ == '__main__':
             elif d == '[':
                 lines.append(prefix + 'while mem[ptr] != 0:')
                 prefix += orig_prefix
+                if not got_jit:
+                    lines.append(prefix + 'jitdriver.jit_merge_point(ptr=ptr, mem=mem) ')
+                    got_jit = True
                 closed += 1
             elif d == '[if':
                 lines.append(prefix + 'if mem[ptr] != 0:')
