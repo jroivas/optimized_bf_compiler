@@ -1,5 +1,6 @@
 import os
-from backends.backend import Backend
+#from backend.backend import Backend
+from backend import Backend
 
 class CBackend(Backend):
     __call_prefix = '__func_call_'
@@ -32,15 +33,15 @@ class CBackend(Backend):
         inc += '%s *mem = 0;\n' % (self.__mem_type)
         inc += '/* Check if we need to increment memory size */\n'
         inc += 'static %s *guard_mem(%s *ptr) {\n' % (self.__mem_type, self.__mem_type)
-        inc += '\tunsigned int diff = ptr-mem;\n'
-        inc += '\tif (diff>mem_size) {\n'
-        inc += '\t\tmem_size = diff + 1000;\n'
-        inc += '\t\tmem = realloc(mem, mem_size);\n'
-        inc += '\t\treturn mem + diff;\n'
-        inc += '\t}\n'
-        inc += '\treturn ptr;\n'
+        inc += '    unsigned int diff = ptr-mem;\n'
+        inc += '    if (diff>mem_size) {\n'
+        inc += '        mem_size = diff + 1000;\n'
+        inc += '        mem = realloc(mem, mem_size);\n'
+        inc += '        return mem + diff;\n'
+        inc += '    }\n'
+        inc += '    return ptr;\n'
         inc += '}\n'
-        prefix = '\t'
+        prefix = '    '
         for b in blocks:
             methods += '%s *%s%s(%s *ptr);\n' % (self.__mem_type, self.__call_prefix, b, self.__mem_type)
             res.append('%s *%s%s(%s *ptr) {' % (self.__mem_type, self.__call_prefix, b, self.__mem_type))

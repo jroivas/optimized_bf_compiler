@@ -1,5 +1,5 @@
 import os
-from backends.backend import Backend
+from backend import Backend
 
 class RPythonBackend(Backend):
     __call_prefix = '__func_call_'
@@ -61,7 +61,7 @@ def target(*args):
   return entry_point, None
 
 if __name__ == '__main__':
-  run()  
+  run()
 """
 
         self.code = inc + methods + res

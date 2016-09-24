@@ -250,7 +250,7 @@ def merge_small_blocks(data, blocks):
     newdata = merge_small_block(data, small_ones)
 
     return (newdata, newblocks)
-                    
+
 def immediate(data, blocks):
     imm_blocks = {}
     for b in blocks:
@@ -259,7 +259,7 @@ def immediate(data, blocks):
     return (data, imm_blocks)
 
 def get_backend(oname, flags):
-    name = flags['backend']    
+    name = flags['backend']
     fdir = os.path.dirname(__file__)
     backend_dir = os.path.join(fdir, 'backends')
     files = os.listdir(backend_dir)
