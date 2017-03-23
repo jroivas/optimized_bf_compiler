@@ -6,7 +6,6 @@ import vmops
 
 class CBackend(Backend):
     __call_prefix = '__func_call_'
-    #__mem_type = 'unsigned int'
 
     def __init__(self, name, flags):
         self.code = None
@@ -52,7 +51,7 @@ class CBackend(Backend):
             res.append('}')
 
         res = '\n'.join(res) + '\n'
-        res += 'int main(unsigned int argc, char **argv) {\n'
+        res += 'int main(int argc, char **argv) {\n'
         res += prefix + 'mem = (%s*)calloc(1, mem_size);\n' % (self.__mem_type)
         res += prefix + '%s *ptr = mem + 1000;\n' % (self.__mem_type)
         res += '\n'.join(self.translace_c_block(data, prefix)) + '\n'
@@ -101,12 +100,9 @@ class CBackend(Backend):
             elif d == vmops.VmOps.PLUS_MUL:
                 lines.append(prefix + 'ptr[%s] += ptr[%s] * %s;' % c)
             elif d == vmops.VmOps.SET_VAL:
-                #lines.append(prefix + '*(ptr+%s) = %s;' % c)
                 lines.append(prefix + 'ptr[%s] = %s;' % c)
             elif d == vmops.VmOps.OUT_VAL:
                 lines.append(prefix + 'putchar(*ptr);')
-                #lines.append(prefix + 'fflush(stdout);')
-                #res += prefix + 'printf("%d\\n", *ptr);\n'
             elif d == vmops.VmOps.INP_VAL:
                 lines.append(prefix + '*ptr = getchar();')
             elif d == vmops.VmOps.LOOP_START:
@@ -127,11 +123,9 @@ class CBackend(Backend):
             lines.append(prefix + '}')
             closed -= 1
         return lines
-        #return '\n'.join(lines)
 
     def compile(self):
         oname_bin = self.src_name.replace('.c', '')
-        #oname_bin += '.bin'
         os.system('gcc -O3 %s -o %s' % (self.src_name, oname_bin))
         self.binary_name = oname_bin
 
