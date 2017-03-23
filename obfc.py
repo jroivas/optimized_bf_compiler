@@ -5,9 +5,7 @@ import os
 import argparse
 import importlib
 
-__cmds = ['<', '>', '+', '-', '.', ',', '[', ']']
-
-#from backends.c import CBackend
+from backends.vmops import VmOps
 
 def read(fname):
     try:
@@ -21,7 +19,7 @@ def read(fname):
 def parse(data):
     cmds = []
     for d in data:
-        if d in __cmds:
+        if d in VmOps.CMDS:
             cmds.append(d)
     return cmds
 
@@ -38,29 +36,25 @@ def detect_loops(data):
     bid = 0
     while True:
         d = data[i]
-        if d == '[':
+        if d == VmOps.LOOP_START:
             starts.append(i)
-        elif d == ']':
+        elif d == VmOps.LOOP_END:
             if not starts:
                 raise ValueError('Block end without a start! @%s' % (i))
             start = starts.pop()
             end = i
             block = data[start:end+1]
             tmp = is_block(block, blocks)
-            if block == ['[', '-', ']']:
-                middle = ['=0']
+            if block == [VmOps.LOOP_START, VmOps.DEC_VAL, VmOps.LOOP_END]:
+                middle = ['%s0' % (VmOps.SET_VAL)]
             elif tmp is None:
                 blocks[bid] = block
-                middle = ['b%s' % (bid)]
+                middle = ['%s%s' % (VmOps.BLOCK, bid)]
                 bid += 1
             else:
-                middle = ['b%s' % (tmp)]
-                #print tmp
-                #bid = tmp
+                middle = ['%s%s' % (VmOps.BLOCK, tmp)]
             newdata = data[:start] + middle + data[end+1:]
             data = newdata
-            #print block
-            #print newdata
             starts = []
             i = -1
         i += 1
@@ -72,8 +66,8 @@ def detect_loops(data):
 def optimize_adds(data, i, dlen):
     d = data[i]
     val = 0
-    while d == '+' or d == '-':
-        if d == '+':
+    while d == VmOps.INC_VAL or d == VmOps.DEC_VAL:
+        if d == VmOps.INC_VAL:
             val += 1
         else:
             val -= 1
@@ -86,8 +80,8 @@ def optimize_adds(data, i, dlen):
 def optimize_ptrs(data, i, dlen):
     d = data[i]
     val = 0
-    while d == '>' or d == '<':
-        if d == '>':
+    while d == VmOps.INC_PTR or d == VmOps.DEC_PTR:
+        if d == VmOps.INC_PTR:
             val += 1
         else:
             val -= 1
@@ -107,14 +101,14 @@ def optimize_simple_adds(data):
     values = {}
     for (d, c) in data:
         prev = d
-        if d == '+':
+        if d == VmOps.INC_VAL:
             val += c
-        elif d == '>':
+        elif d == VmOps.INC_PTR:
             if val != 0:
                 if offs != 0:
-                    newcode.append(('+p', (offs, val)))
+                    newcode.append((VmOps.ADD_PTR, (offs, val)))
                 else:
-                    newcode.append(('+', val))
+                    newcode.append((VmOps.INC_VAL, val))
                     orig_change = True
                 values[origoff + offs] = values.get(origoff + offs, 0) + val
             offs += c
@@ -122,19 +116,19 @@ def optimize_simple_adds(data):
         elif d == '=':
             if val != 0:
                 if offs != 0:
-                    newcode.append(('+p', (offs, val)))
+                    newcode.append((VmOps.ADD_PTR, (offs, val)))
                 else:
-                    newcode.append(('+', val))
+                    newcode.append((VmOps.INC_VAL, val))
                     orig_change = True
             val = 0
 
             values = {}
             newcode.append((d, (c[0]+offs, c[1])))
-        elif d == '[':
+        elif d == VmOps.LOOP_START:
             pass
-        elif d == ']':
+        elif d == VmOps.LOOP_END:
             if offs != 0:
-                newcode.append(('>', offs))
+                newcode.append((VmOps.INC_PTR, offs))
                 orig_change = True
                 origoff += offs
                 offs = 0
@@ -142,7 +136,7 @@ def optimize_simple_adds(data):
             return data
 
     if val != 0:
-        newcode.append(('+', val))
+        newcode.append((VmOps.INC_VAL, val))
         values[origoff + offs] = values.get(origoff + offs, 0) + val
         if offs == 0:
             orig_change = True
@@ -152,23 +146,25 @@ def optimize_simple_adds(data):
         if values:
             newcode = []
             for off in values:
-                newcode.append( ('+*', (off, 0, values[off])))
-            newcode.append( ('=', (0, 0)))
+                newcode.append( (VmOps.PLUS_MUL, (off, 0, values[off])))
+            newcode.append((VmOps.SET_VAL, (0, 0)))
             return newcode
 
-    if data[0][0] == '[':
+    if data[0][0] == VmOps.LOOP_START:
         if not orig_change:
-            newcode.insert(0, ('[if',''))
-            newcode.append((']',''))
+            newcode.insert(0, (VmOps.LOOP_IF,''))
+            newcode.append((VmOps.LOOP_END,''))
         else:
-            newcode.insert(0, ('[',''))
-            newcode.append((']',''))
+            newcode.insert(0, (VmOps.LOOP_START,''))
+            newcode.append((VmOps.LOOP_END,''))
 
     return newcode
 
 def optimize_loops_1(data):
-    if data == [('[', ''), ('+', -1), (']', '')]:
-        return [('=', (0, 0))]
+    if data == [(VmOps.LOOP_START, ''), (VmOps.INC_VAL, -1), (VmOps.LOOP_END, '')]:
+        return [(VmOps.SET_VAL, (0, 0))]
+    if data == [(VmOps.LOOP_IF, ''), (VmOps.LOOP_END, '')]:
+        return []
     return data
 
 def optimize_loops(data, blocks):
@@ -182,29 +178,29 @@ def bf_compile(data):
     dlen = len(data)
     while True:
         d = data[i]
-        if d == '+' or d == '-':
+        if d == VmOps.INC_VAL or d == VmOps.DEC_VAL:
             (val, i) = optimize_adds(data, i, dlen)
-            imm.append(('+', val))
-        elif d == '>' or d == '<':
+            imm.append((VmOps.INC_VAL, val))
+        elif d == VmOps.INC_PTR or d == VmOps.DEC_PTR:
             (val, i) = optimize_ptrs(data, i, dlen)
-            imm.append(('>', val))
-        elif d == '.':
-            imm.append(('.', ''))
+            imm.append((VmOps.INC_PTR, val))
+        elif d == VmOps.OUT_VAL:
+            imm.append((VmOps.OUT_VAL, ''))
             i += 1
-        elif d == ',':
-            imm.append((',', ''))
+        elif d == VmOps.INP_VAL:
+            imm.append((VmOps.INP_VAL, ''))
             i += 1
-        elif d == '[':
-            imm.append(('[', ''))
+        elif d == VmOps.LOOP_START:
+            imm.append((VmOps.LOOP_START, ''))
             i += 1
-        elif d == ']':
-            imm.append((']', ''))
+        elif d == VmOps.LOOP_END:
+            imm.append((VmOps.LOOP_END, ''))
             i += 1
-        elif d[0] == 'b':
+        elif d[0] == VmOps.BLOCK:
             imm.append((d, ''))
             i += 1
-        elif d == '=0':
-            imm.append(('=', (0, 0)))
+        elif d == '%s0' % (VmOps.SET_VAL):
+            imm.append((VmOps.SET_VAL, (0, 0)))
             i += 1
 
         if i >= dlen:
@@ -217,7 +213,7 @@ def merge_small_block(block, small_ones):
     tmp = []
     for (d, c) in block:
         ok = False
-        if d[0] == 'b':
+        if d[0] == VmOps.BLOCK:
             num = int(d[1:])
             if num in small_ones:
                 tmp += small_ones[num]
@@ -230,7 +226,7 @@ def merge_small_block(block, small_ones):
 def sub_block_cnt(data):
     cnt = 0
     for (d, c) in data:
-        if d[0] == 'b':
+        if d[0] == VmOps.BLOCK:
             cnt += 1
 
     return cnt
@@ -317,7 +313,7 @@ def main():
     backend.write()
     backend.compile()
     res = backend.binaryName()
-    print res
+    print (res)
 
 if __name__ == '__main__':
     main()

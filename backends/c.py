@@ -1,6 +1,8 @@
 import os
 #from backend.backend import Backend
 from backend import Backend
+#from backend import vmops.VmOps
+import vmops
 
 class CBackend(Backend):
     __call_prefix = '__func_call_'
@@ -48,7 +50,7 @@ class CBackend(Backend):
             res += self.translace_c_block(blocks[b], prefix)
             res.append(prefix + 'return ptr;')
             res.append('}')
-        
+
         res = '\n'.join(res) + '\n'
         res += 'int main(unsigned int argc, char **argv) {\n'
         res += prefix + 'mem = (%s*)calloc(1, mem_size);\n' % (self.__mem_type)
@@ -66,7 +68,7 @@ class CBackend(Backend):
         lines = []
         orig_prefix = prefix
         for (d, c) in data:
-            if d == '>':
+            if d == vmops.VmOps.INC_PTR:
                 if c == 0:
                     pass
                 elif c == 1:
@@ -79,7 +81,7 @@ class CBackend(Backend):
                     lines.append(prefix + 'ptr += %s;' % (c))
                     # Guards help to resize memory in case of owerflow
                     #res += prefix + 'ptr = guard_mem(ptr);\n'
-            elif d == '+':
+            elif d == vmops.VmOps.INC_VAL:
                 if c == 0:
                     pass
                 elif c == 1:
@@ -88,7 +90,7 @@ class CBackend(Backend):
                     lines.append(prefix + '--(*ptr);')
                 else:
                     lines.append(prefix + '(*ptr) += %s;' % (c))
-            elif d == '+p':
+            elif d == vmops.VmOps.ADD_PTR:
                 if c[0] != 0:
                     if c[1] == 1:
                         lines.append(prefix + '++ptr[%s];' % (c[0]))
@@ -96,30 +98,30 @@ class CBackend(Backend):
                         lines.append(prefix + '--ptr[%s];' % (c[0]))
                     else:
                         lines.append(prefix + 'ptr[%s] += %s;' % (c[0], c[1]))
-            elif d == '+*':
+            elif d == vmops.VmOps.PLUS_MUL:
                 lines.append(prefix + 'ptr[%s] += ptr[%s] * %s;' % c)
-            elif d == '=':
+            elif d == vmops.VmOps.SET_VAL:
                 #lines.append(prefix + '*(ptr+%s) = %s;' % c)
                 lines.append(prefix + 'ptr[%s] = %s;' % c)
-            elif d == '.':
+            elif d == vmops.VmOps.OUT_VAL:
                 lines.append(prefix + 'putchar(*ptr);')
                 #lines.append(prefix + 'fflush(stdout);')
                 #res += prefix + 'printf("%d\\n", *ptr);\n'
-            elif d == ',':
+            elif d == vmops.VmOps.INP_VAL:
                 lines.append(prefix + '*ptr = getchar();')
-            elif d == '[':
+            elif d == vmops.VmOps.LOOP_START:
                 lines.append(prefix + 'while (*ptr) {')
                 prefix += orig_prefix
                 closed += 1
-            elif d == '[if':
+            elif d == vmops.VmOps.LOOP_IF:
                 lines.append(prefix + 'if (*ptr) {')
                 prefix += orig_prefix
                 closed += 1
-            elif d == ']':
+            elif d == vmops.VmOps.LOOP_END:
                 prefix = prefix[:-1]
                 lines.append(prefix + '}')
                 closed -= 1
-            elif d[0] == 'b':
+            elif d[0] == vmops.VmOps.BLOCK:
                 lines.append(prefix + 'ptr = %s%s(ptr);' % (self.__call_prefix, d[1:]))
         while closed > 0:
             lines.append(prefix + '}')

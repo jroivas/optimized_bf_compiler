@@ -1,4 +1,5 @@
 import os
+import vmops
 from backend import Backend
 
 class RPythonBackend(Backend):
@@ -72,44 +73,44 @@ if __name__ == '__main__':
         orig_prefix = prefix
         got_jit = False
         for (d, c) in data:
-            if d == '>':
+            if d == vmops.VmOps.INC_PTR:
                 if c == 0:
                     pass
                 else:
                     lines.append(prefix + 'ptr += %s' % (c))
-            elif d == '+':
+            elif d == vmops.VmOps.INC_VAL:
                 if c == 0:
                     pass
                 else:
                     lines.append(prefix + 'while ptr + 100 > len(mem):')
                     lines.append(prefix + prefix + 'mem.append(0)')
                     lines.append(prefix + 'mem[ptr] += %s' % (c))
-            elif d == '+p':
+            elif d == vmops.VmOps.ADD_PTR:
                 if c[0] != 0:
                     lines.append(prefix + 'mem[ptr + %s] += %s' % c)
-            elif d == '+*':
+            elif d == vmops.VmOps.PLUS_MUL:
                 lines.append(prefix + 'mem[ptr + %s] += mem[ptr + %s] * %s' % c)
-            elif d == '=':
+            elif d == vmops.VmOps.SET_VAL:
                 lines.append(prefix + 'mem[ptr + %s] = %s' % c)
-            elif d == '.':
+            elif d == vmops.VmOps.OUT_VAL:
                 lines.append(prefix + 'os.write(1, chr(mem[ptr]))')
-            elif d == ',':
+            elif d == vmops.VmOps.INP_VAL:
                 lines.append(prefix + 'mem[ptr] = ord(os.read(0, 1)[0])')
-            elif d == '[':
+            elif d == vmops.VmOps.LOOP_START:
                 lines.append(prefix + 'while mem[ptr] != 0:')
                 prefix += orig_prefix
                 if not got_jit:
                     lines.append(prefix + 'jitdriver.jit_merge_point(ptr=ptr, mem=mem) ')
                     got_jit = True
                 closed += 1
-            elif d == '[if':
+            elif d == vmops.VmOps.LOOP_IF:
                 lines.append(prefix + 'if mem[ptr] != 0:')
                 prefix += orig_prefix
                 closed += 1
-            elif d == ']':
+            elif d == vmops.VmOps.LOOP_END:
                 prefix = prefix[:-len(orig_prefix)]
                 closed -= 1
-            elif d[0] == 'b':
+            elif d[0] == vmops.VmOps.BLOCK:
                 lines.append(prefix + 'ptr = %s%s(mem, ptr);' % (self.__call_prefix, d[1:]))
         while closed > 0:
             closed -= 1
